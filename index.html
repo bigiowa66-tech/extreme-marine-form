@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<!-- No network access of any kind: the only thing this page does with the outside world is open the customer's own
+     email app (mailto:). It loads nothing but this file and logo.png. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Extreme Marine request form</title>
+<style>
+:root { --navy:#0b2a4a; --navy2:#163e69; --accent:#e8801a; --accent-dark:#c76a0c; --bg:#f3f5f8; --line:#d9dfe6; --text:#1a2633; --muted:#5d6b7a; --err:#b3261e; --ok:#1f7a4d; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; color:var(--text); background:var(--bg); line-height:1.45; }
+header { background:var(--navy); color:#fff; padding:.7rem 1rem; border-bottom:4px solid var(--accent); display:flex; align-items:center; gap:.7rem; }
+header img { width:44px; height:44px; border-radius:6px; background:#000; }
+header .biz { font-weight:700; font-size:1.1rem; line-height:1.1; } header .sub { font-size:.8rem; opacity:.85; }
+main { max-width:760px; margin:0 auto; padding:1rem; }
+h1 { font-size:1.4rem; color:var(--navy); margin:.2rem 0 .1rem; }
+.meta { color:var(--muted); margin:0 0 1rem; font-size:.92rem; }
+.panel { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem; margin-bottom:1rem; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:.9rem 1rem; }
+.field { display:flex; flex-direction:column; gap:.25rem; min-width:0; } .field.wide { grid-column:1/-1; }
+label, .label { font-weight:600; font-size:.92rem; color:var(--navy); }
+.req { color:var(--err); }
+input, select, textarea { font:inherit; padding:.55rem .6rem; border:1px solid #b7c1cc; border-radius:6px; background:#fff; color:var(--text); width:100%; max-width:100%; min-height:44px; }
+textarea { resize:vertical; min-height:70px; }
+input[type=checkbox] { width:1.2rem; height:1.2rem; min-height:0; accent-color:var(--navy2); }
+.checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.2rem 1rem; border:0; padding:0; margin:0; }
+.check { display:flex; align-items:center; gap:.5rem; font-weight:400; color:var(--text); min-height:36px; }
+.est-row { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem 1rem; padding:.5rem 0; border-bottom:1px solid var(--line); }
+.est-row .item { flex:1 1 220px; font-weight:500; } .est-row select { flex:0 0 11rem; width:11rem; }
+details summary { cursor:pointer; color:var(--navy2); font-size:.9rem; margin-top:.5rem; }
+.hint { font-size:.8rem; color:var(--muted); }
+button { font:inherit; padding:.7rem 1.1rem; border-radius:6px; border:1px solid var(--navy2); background:#fff; color:var(--navy); cursor:pointer; min-height:46px; }
+button.primary { background:var(--accent); border-color:var(--accent-dark); color:#1b1000; font-weight:700; font-size:1.05rem; }
+button[disabled] { opacity:.5; cursor:not-allowed; }
+.actions { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1rem; }
+.note { background:#e6f4ec; border:1px solid #b9dcc8; color:#14532d; padding:.75rem .9rem; border-radius:6px; font-weight:600; }
+.warn { background:#fff4e0; border:1px solid #f0c27a; padding:.75rem .9rem; border-radius:6px; }
+.err { color:var(--err); font-weight:600; }
+dl { display:grid; grid-template-columns:minmax(120px,34%) 1fr; gap:.3rem .8rem; margin:0; } dt { font-weight:600; color:var(--navy); font-size:.88rem; } dd { margin:0; white-space:pre-wrap; }
+a { color:var(--navy2); }
+footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
+[hidden] { display:none !important; }
+@media (max-width:640px) { dl { grid-template-columns:1fr; } button { width:100%; } .est-row select { flex:1 1 100%; width:100%; } }
+@media print { header, .actions, footer { display:none; } body { background:#fff; } .panel { border:0; padding:0; } }
+</style>
+</head>
+<body>
+<header id="head"></header>
+<main id="app"><noscript><p class="warn">This form needs JavaScript turned on. Please call or text the shop instead.</p></noscript></main>
+<footer id="foot"></footer>
+
+<!-- ===================================================================================================
+     form-core: no page access. Field list, answer serialization, mailto link, and link-parameter reader.
+     The serialization MUST stay identical to js/forms.js (serializeResponse / emailForResponse) and js/util.js (mailtoLink)
+     in the app; tests/hosted-form.test.mjs checks this byte for byte.
+     =================================================================================================== -->
+<script id="form-core">
+(function (root) {
+  'use strict';
+  const DELIVERY = ['Launch at Marina', 'I Will Pick Up', 'Deliver To'];
+  const DEFAULT_LISTS = {
+    storageTypes: ['Indoor Storage', 'Outdoor Storage', 'Outdoor - Shrink Wrapped', 'Customer Storing Elsewhere'],
+    endOfSeasonServices: ['Fuel stabilizer', 'Engine fogging', 'Oil and filter change', 'Lower unit gear oil change', 'Drain water systems / antifreeze', 'Battery removal and storage', 'Shrink wrap', 'Wash / detail before storage'],
+    winterEstimateWork: ['Engine repair / diagnosis', 'Electrical repair', 'Hull / gelcoat / fiberglass repair', 'Canvas / upholstery', 'Trailer service', 'Electronics / audio'],
+  };
+  // type: text | email | tel | date | textarea | yesno | select | checks | estimate
+  const FIELDS = {
+    Winter: [
+      { key: 'name', label: 'Name', type: 'text' },
+      { key: 'email', label: 'Email', type: 'email' },
+      { key: 'phone', label: 'Phone', type: 'tel' },
+      { key: 'boats', label: 'Boat(s) Make/Length', type: 'text' },
+      { key: 'jetSkis', label: 'Jet Ski(s) Make', type: 'text' },
+      { key: 'billingAddress', label: 'Billing Address', type: 'textarea' },
+      { key: 'localAddress', label: 'Local Address', type: 'textarea' },
+      { key: 'keyLocation', label: 'Key Location', type: 'text' },
+      { key: 'winterize', label: 'Winterize?', type: 'yesno' },
+      { key: 'doneUsingDate', label: 'Done Using Date', type: 'date' },
+      { key: 'storing', label: 'Storing?', type: 'yesno' },
+      { key: 'storageType', label: 'Storage Type', type: 'select', list: 'storageTypes' },
+      { key: 'springLaunchDate', label: 'Spring Launch Date', type: 'date' },
+      { key: 'haulOut', label: 'Haul-Out?', type: 'yesno' },
+      { key: 'notes', label: 'Special Requests/Notes', type: 'textarea' },
+      { key: 'endOfSeasonServices', label: 'End of Season Services', type: 'checks', list: 'endOfSeasonServices' },
+      { key: 'winterEstimateWork', label: 'Winter Estimate Work', type: 'checks', list: 'winterEstimateWork' },
+      { key: 'otherWorkDescription', label: 'Other Work Description', type: 'textarea' },
+    ],
+    Spring: [
+      { key: 'name', label: 'Name', type: 'text' },
+      { key: 'email', label: 'Email', type: 'email' },
+      { key: 'phone', label: 'Phone', type: 'tel' },
+      { key: 'boats', label: 'Boat(s) Make/Length', type: 'text' },
+      { key: 'jetSkis', label: 'Jet Ski(s) Make', type: 'text' },
+      { key: 'keyLocation', label: 'Key Location', type: 'text' },
+      { key: 'launchDate', label: 'Requested Launch Date', type: 'date' },
+      { key: 'flexible', label: 'Flexible on Date?', type: 'yesno' },
+      { key: 'deWinterize', label: 'De-winterize / Commission Engine(s)?', type: 'yesno' },
+      { key: 'battery', label: 'Battery Install and Charge?', type: 'yesno' },
+      { key: 'fuelFluids', label: 'Fuel and Fluids Check?', type: 'yesno' },
+      { key: 'wash', label: 'Wash / Detail?', type: 'yesno' },
+      { key: 'estimateDecisions', label: 'Winter Estimate Work - Approve or Decline', type: 'estimate' },
+      { key: 'additionalWork', label: 'Additional Work Requested', type: 'textarea' },
+      { key: 'delivery', label: 'Delivery', type: 'select', options: DELIVERY },
+      { key: 'deliverTo', label: 'Deliver To (address / location)', type: 'text', showIf: { key: 'delivery', value: 'Deliver To' } },
+      { key: 'notes', label: 'Special Requests/Notes', type: 'textarea' },
+    ],
+  };
+  // Only these may arrive prefilled in the link. Yes/No answers, dates and lists never do.
+  const PREFILL_KEYS = ['name', 'email', 'phone', 'boats', 'jetSkis', 'billingAddress', 'localAddress', 'keyLocation', 'storageType'];
+
+  function formatDate(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[2] + '/' + m[3] + '/' + m[1] : ''; }
+
+  function valueToText(field, v) {
+    if (field.type === 'checks') return (v || []).join('; ');
+    if (field.type === 'estimate') return Object.entries(v || {}).map(([k, d]) => k + ' = ' + (d || 'No answer')).join('; ');
+    if (field.type === 'date') return v ? formatDate(v) : '';
+    return String(v == null ? '' : v).replace(/\r?\n\s*\n/g, '\n').trim();
+  }
+
+  function displayRows(formType, data) {
+    const rows = [];
+    for (const f of FIELDS[formType]) { const t = valueToText(f, data && data[f.key]); if (t) rows.push([f.label, t]); }
+    return rows;
+  }
+
+  function serialize(formType, season, data, biz) {
+    const lines = [(biz || 'Extreme Marine').toUpperCase() + ' - ' + formType.toUpperCase() + ' FORM', 'Season: ' + season, 'Form Type: ' + formType, ''];
+    for (const f of FIELDS[formType]) lines.push(f.label + ': ' + valueToText(f, data && data[f.key]));
+    return lines.join('\n');
+  }
+
+  function buildEmail(o) {
+    const who = o.data && o.data.name ? ' - ' + o.data.name : '';
+    return {
+      to: o.shop,
+      subject: o.formType + ' Form' + who + ' - ' + o.season,
+      body: serialize(o.formType, o.season, o.data, o.biz) + '\n\nSent from the ' + (o.biz || 'Extreme Marine') + ' request form.',
+    };
+  }
+
+  const compact = (s) => s.replace(/%3A/gi, ':').replace(/%2C/gi, ',').replace(/%3B/gi, ';').replace(/%40/g, '@').replace(/%24/g, '$');
+  function mailtoLink(to, subject, body) {
+    const crlf = String(body == null ? '' : body).replace(/\r?\n/g, '\r\n');
+    return 'mailto:' + compact(encodeURIComponent(to || '')) + '?subject=' + compact(encodeURIComponent(subject || '')) + '&body=' + compact(encodeURIComponent(crlf));
+  }
+
+  // ---- reading the personal link (parameters may be in #fragment or ?query; fragment wins) ----
+  function parseParams(str) {
+    const out = {};
+    const p = new URLSearchParams(String(str || '').replace(/^[?#]/, ''));
+    p.forEach((v, k) => { (out[k] = out[k] || []).push(String(v).replace(/\u0000/g, '')); });
+    return out;
+  }
+  const first = (p, k, max) => String((p[k] && p[k][0]) || '').trim().slice(0, max || 500);
+  const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function readConfig(search, hash) {
+    const p = Object.assign({}, parseParams(search), parseParams(hash));
+    const ft = first(p, 'form', 20).toLowerCase();
+    const form = ft === 'winter' ? 'Winter' : ft === 'spring' ? 'Spring' : '';
+    const season = first(p, 'season', 40);
+    const shop = first(p, 'shop', 200);
+    if (!form || !season || !EMAIL.test(shop)) return { ok: false };
+    const prefill = {};
+    for (const f of FIELDS[form]) if (PREFILL_KEYS.indexOf(f.key) >= 0) { const v = first(p, f.key, 2000); if (v) prefill[f.key] = v; }
+    const items = [];
+    if (form === 'Spring') for (const i of (p.item || []).slice(0, 60)) { const t = i.trim().slice(0, 300); if (t && items.indexOf(t) < 0) items.push(t); }
+    const lists = {};
+    for (const k of Object.keys(DEFAULT_LISTS)) lists[k] = DEFAULT_LISTS[k].slice();
+    const over = [['storageOption', 'storageTypes'], ['serviceOption', 'endOfSeasonServices'], ['estimateOption', 'winterEstimateWork']];
+    for (const o of over) { const vals = (p[o[0]] || []).map((x) => x.trim().slice(0, 200)).filter(Boolean).slice(0, 40); if (vals.length) lists[o[1]] = vals; }
+    return { ok: true, form, season, shop, biz: first(p, 'biz', 80) || 'Extreme Marine', shopPhone: first(p, 'shopPhone', 40), prefill, items, lists };
+  }
+
+  root.FormCore = { FIELDS, DEFAULT_LISTS, DELIVERY, PREFILL_KEYS, formatDate, valueToText, displayRows, serialize, buildEmail, mailtoLink, parseParams, readConfig, EMAIL };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+<!-- ===================================================================================================
+     form-ui: draws the form from FormCore and reads the answers back. Text goes in via textContent/value only.
+     =================================================================================================== -->
+<script id="form-ui">
+(function () {
+  'use strict';
+  const C = window.FormCore;
+  const app = document.getElementById('app');
+  const head = document.getElementById('head');
+  const foot = document.getElementById('foot');
+  const el = (tag, attrs, ...kids) => {
+    const n = document.createElement(tag);
+    for (const k in (attrs || {})) { const v = attrs[k]; if (v == null || v === false) continue; if (k === 'class') n.className = v; else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), v); else if (v === true) n.setAttribute(k, ''); else n.setAttribute(k, String(v)); }
+    for (const c of kids.flat()) if (c != null && c !== false) n.append(c.nodeType ? c : document.createTextNode(String(c)));
+    return n;
+  };
+
+  const cfg = C.readConfig(location.search, location.hash);
+  if (!cfg.ok) {
+    document.title = 'Request form';
+    app.append(el('div', { class: 'panel' }, el('h1', null, 'This link is incomplete'),
+      el('p', null, 'Please open the form using the link in the email you received. If it still does not work, call or text the shop.')));
+    return;
+  }
+
+  const FT = cfg.form;
+  const fields = C.FIELDS[FT];
+  const title = FT === 'Winter' ? 'Winterization and Storage Request' : 'Spring Launch and Commissioning Request';
+  document.title = title + ' - ' + cfg.biz;
+  const logo = el('img', { src: 'logo.png', alt: '', width: 44, height: 44 });
+  logo.addEventListener('error', () => logo.remove());
+  head.append(logo, el('div', null, el('div', { class: 'biz' }, cfg.biz), el('div', { class: 'sub' }, 'Request form')));
+  foot.textContent = cfg.biz + (cfg.shopPhone ? ' · ' + cfg.shopPhone : '') + ' · ' + cfg.shop;
+
+  const readers = {}, wraps = {};
+  const form = el('div', { class: 'grid' });
+  let est = null;
+
+  for (const f of fields) {
+    const id = 'f-' + f.key;
+    const pre = cfg.prefill[f.key] || '';
+    const wrap = el('div', { class: 'field' + (['textarea', 'checks', 'estimate'].indexOf(f.type) >= 0 ? ' wide' : '') });
+    wraps[f.key] = wrap;
+    const star = (f.key === 'name' || f.key === 'email') ? el('span', { class: 'req', title: 'Required' }, ' *') : null;
+    if (f.type === 'text' || f.type === 'email' || f.type === 'tel' || f.type === 'date') {
+      const input = el('input', { id, type: f.type, autocomplete: f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : f.key === 'name' ? 'name' : 'off' });
+      input.value = pre;
+      readers[f.key] = () => input.value.trim();
+      wrap.append(el('label', { for: id }, f.label, star), input);
+    } else if (f.type === 'textarea') {
+      const ta = el('textarea', { id, rows: 2 }); ta.value = pre;
+      readers[f.key] = () => ta.value.trim();
+      wrap.append(el('label', { for: id }, f.label), ta);
+    } else if (f.type === 'yesno') {
+      const sel = el('select', { id }, el('option', { value: '' }, '— choose —'), el('option', { value: 'Yes' }, 'Yes'), el('option', { value: 'No' }, 'No'));
+      readers[f.key] = () => sel.value;
+      wrap.append(el('label', { for: id }, f.label), sel);
+    } else if (f.type === 'select') {
+      let opts = f.options || cfg.lists[f.list] || [];
+      if (pre && opts.indexOf(pre) < 0) opts = opts.concat([pre]);
+      const sel = el('select', { id }, el('option', { value: '' }, '— choose —'), opts.map((o) => el('option', { value: o }, o)));
+      sel.value = pre;
+      readers[f.key] = () => sel.value;
+      wrap.append(el('label', { for: id }, f.label), sel);
+    } else if (f.type === 'checks') {
+      const opts = cfg.lists[f.list] || [];
+      const box = el('fieldset', { class: 'checks' }, el('legend', { class: 'label' }, f.label), opts.map((o) => el('label', { class: 'check' }, el('input', { type: 'checkbox', value: o }), o)));
+      readers[f.key] = () => Array.prototype.map.call(box.querySelectorAll('input:checked'), (i) => i.value);
+      wrap.append(box);
+    } else if (f.type === 'estimate') {
+      const decisions = {};
+      const list = el('div');
+      const ta = el('textarea', { rows: 3, 'aria-label': 'Winter estimate work items, one per line' });
+      ta.value = cfg.items.join('\n');
+      const items = () => { const seen = []; ta.value.split('\n').forEach((l) => { const t = l.trim(); if (t && seen.indexOf(t) < 0) seen.push(t); }); return seen; };
+      const draw = () => {
+        list.textContent = '';
+        const its = items();
+        if (!its.length) list.append(el('p', { class: 'hint' }, 'There is no winter estimate work on file for you. You can leave this blank.'));
+        its.forEach((item, i) => {
+          const sel = el('select', { 'aria-label': 'Approve or decline: ' + item }, el('option', { value: '' }, '— choose —'), el('option', { value: 'Approve' }, 'Approve'), el('option', { value: 'Decline' }, 'Decline'));
+          sel.value = decisions[item] || '';
+          sel.addEventListener('change', () => { decisions[item] = sel.value; });
+          list.append(el('div', { class: 'est-row' }, el('div', { class: 'item' }, item), sel));
+        });
+      };
+      ta.addEventListener('input', draw); draw();
+      readers[f.key] = () => { const o = {}; items().forEach((i) => { o[i] = decisions[i] || ''; }); return o; };
+      wrap.append(el('div', { class: 'label' }, f.label), list, el('details', null, el('summary', null, 'Add or edit items'), ta));
+    }
+    form.append(wrap);
+  }
+
+  const readAnswers = () => {
+    const d = {};
+    for (const f of fields) d[f.key] = readers[f.key]();
+    if (wraps.deliverTo && wraps.deliverTo.hidden) d.deliverTo = '';
+    return d;
+  };
+  const sync = () => {
+    for (const f of fields) if (f.showIf) wraps[f.key].hidden = readers[f.showIf.key]() !== f.showIf.value;
+    const d = readAnswers();
+    submit.disabled = !(d.name && C.EMAIL.test(d.email));
+    hint.textContent = submit.disabled ? 'Please enter your name and a valid email address to continue.' : '';
+  };
+
+  const hint = el('div', { class: 'hint', 'aria-live': 'polite' });
+  const submit = el('button', { class: 'primary', type: 'button', disabled: true, onclick: onSubmit }, 'Submit request');
+  const formPanel = el('div', null,
+    el('h1', null, title), el('p', { class: 'meta' }, 'Season ' + cfg.season + ' · ' + cfg.biz),
+    el('div', { class: 'panel' }, form, el('div', { class: 'actions' }, submit), hint),
+    el('p', { class: 'hint' }, 'Submitting does not send anything by itself. Your email app opens with your request ready, and you press Send there.'));
+  const resultPanel = el('div', { hidden: true });
+  app.append(formPanel, resultPanel);
+  form.addEventListener('input', sync); form.addEventListener('change', sync);
+  sync();
+
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch (e) {
+      const ta = el('textarea', { style: 'position:fixed;opacity:0' }); ta.value = text; document.body.append(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ }
+      ta.remove(); return ok;
+    }
+  }
+
+  function onSubmit() {
+    const data = readAnswers();
+    const mail = C.buildEmail({ formType: FT, season: cfg.season, biz: cfg.biz, shop: cfg.shop, data });
+    const link = C.mailtoLink(mail.to, mail.subject, mail.body);
+    const plain = C.serialize(FT, cfg.season, data, cfg.biz);
+    const status = el('div', { class: 'hint', 'aria-live': 'polite' });
+    const open = el('a', { id: 'mailto-link', href: link }, 'Open my email app again');
+    resultPanel.textContent = '';
+    resultPanel.append(
+      el('div', { class: 'panel' },
+        el('h1', null, 'Request ready — one more step'),
+        el('p', { class: 'note', id: 'sent-note' }, 'Your email app will open with your request ready - press Send there.'),
+        el('p', null, 'Nothing has been sent until you press Send in your email app.'),
+        el('div', { class: 'actions' },
+          el('button', { type: 'button', id: 'copy-btn', onclick: async () => { status.textContent = (await copy(plain)) ? 'Your answers were copied.' : 'Copy did not work: select the text below and copy it.'; } }, 'Copy my answers'),
+          el('button', { type: 'button', onclick: () => window.print() }, 'Print'),
+          el('button', { type: 'button', onclick: () => { resultPanel.hidden = true; formPanel.hidden = false; window.scrollTo(0, 0); } }, 'Change my answers')),
+        status,
+        el('p', { class: 'hint' }, 'If your email app does not open, ', open, ', or use "Copy my answers" and email them to ' + cfg.shop + (cfg.shopPhone ? ', or call/text ' + cfg.shopPhone : '') + '.')),
+      el('div', { class: 'panel' }, el('h2', null, title + ' — ' + cfg.season),
+        el('dl', null, C.displayRows(FT, data).map((r) => [el('dt', null, r[0]), el('dd', null, r[1])]))));
+    formPanel.hidden = true; resultPanel.hidden = false; window.scrollTo(0, 0);
+    window.location.href = link;
+  }
+})();
+</script>
+</body>
+</html>
