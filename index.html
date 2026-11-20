@@ -43,6 +43,19 @@ button[disabled] { opacity:.5; cursor:not-allowed; }
 dl { display:grid; grid-template-columns:minmax(120px,34%) 1fr; gap:.3rem .8rem; margin:0; } dt { font-weight:600; color:var(--navy); font-size:.88rem; } dd { margin:0; white-space:pre-wrap; }
 a { color:var(--navy2); }
 footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
+/* services and prices (shown only when the customer's link carries them) */
+.services-panel { grid-column:1/-1; border:2px solid var(--navy); border-radius:10px; padding:1rem; background:#f8fbff; }
+.svc-title { margin:0 0 .6rem; font-size:1.15rem; color:var(--navy); }
+.svc-group { border:0; padding:0; margin:1rem 0 0; min-width:0; }
+.svc-group legend { font-weight:700; color:var(--navy); padding:0; margin-bottom:.3rem; }
+.svc-row { display:flex; flex-wrap:wrap; align-items:center; gap:.3rem .8rem; padding:.7rem .8rem; min-height:58px; margin:.4rem 0; border:2px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; font-weight:500; font-size:1rem; color:var(--text); }
+.svc-row input[type=checkbox] { width:1.8rem; height:1.8rem; flex:none; }
+.svc-row.on { border-color:var(--accent); background:#fff8ef; }
+.svc-name { flex:1 1 13rem; font-size:1.05rem; }
+.svc-calc { flex:1 1 100%; padding-left:2.6rem; color:var(--navy2); font-weight:700; }
+.svc-calc:empty { display:none; }
+.svc-total { margin-top:1rem; padding:.7rem .9rem; border-radius:8px; background:var(--navy); color:#fff; font-size:1.3rem; font-weight:800; }
+.svc-note { margin:.4rem 0 0; font-size:.9rem; }
 [hidden] { display:none !important; }
 @media (max-width:640px) { dl { grid-template-columns:1fr; } button { width:100%; } .est-row select { flex:1 1 100%; width:100%; } }
 @media print { header, .actions, footer { display:none; } body { background:#fff; } .panel { border:0; padding:0; } }
@@ -74,6 +87,7 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       { key: 'email', label: 'Email', type: 'email' },
       { key: 'phone', label: 'Phone', type: 'tel' },
       { key: 'boats', label: 'Boat(s) Make/Length', type: 'text' },
+      { key: 'boatLength', label: 'Boat Length (feet)', type: 'text', optional: true },
       { key: 'jetSkis', label: 'Jet Ski(s) Make', type: 'text' },
       { key: 'billingAddress', label: 'Billing Address', type: 'textarea' },
       { key: 'localAddress', label: 'Local Address', type: 'textarea' },
@@ -88,12 +102,15 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       { key: 'endOfSeasonServices', label: 'End of Season Services', type: 'checks', list: 'endOfSeasonServices' },
       { key: 'winterEstimateWork', label: 'Winter Estimate Work', type: 'checks', list: 'winterEstimateWork' },
       { key: 'otherWorkDescription', label: 'Other Work Description', type: 'textarea' },
+      { key: 'servicesSelected', label: 'Services Selected', type: 'textarea', optional: true },
+      { key: 'estimatedTotal', label: 'Estimated Total', type: 'text', optional: true },
     ],
     Spring: [
       { key: 'name', label: 'Name', type: 'text' },
       { key: 'email', label: 'Email', type: 'email' },
       { key: 'phone', label: 'Phone', type: 'tel' },
       { key: 'boats', label: 'Boat(s) Make/Length', type: 'text' },
+      { key: 'boatLength', label: 'Boat Length (feet)', type: 'text', optional: true },
       { key: 'jetSkis', label: 'Jet Ski(s) Make', type: 'text' },
       { key: 'keyLocation', label: 'Key Location', type: 'text' },
       { key: 'launchDate', label: 'Requested Launch Date', type: 'date' },
@@ -102,11 +119,14 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       { key: 'battery', label: 'Battery Install and Charge?', type: 'yesno' },
       { key: 'fuelFluids', label: 'Fuel and Fluids Check?', type: 'yesno' },
       { key: 'wash', label: 'Wash / Detail?', type: 'yesno' },
+      { key: 'summerServices', label: 'Spring-Summer Services', type: 'checks', list: 'summerServices', optional: true },
       { key: 'estimateDecisions', label: 'Winter Estimate Work - Approve or Decline', type: 'estimate' },
       { key: 'additionalWork', label: 'Additional Work Requested', type: 'textarea' },
       { key: 'delivery', label: 'Delivery', type: 'select', options: DELIVERY },
       { key: 'deliverTo', label: 'Deliver To (address / location)', type: 'text', showIf: { key: 'delivery', value: 'Deliver To' } },
       { key: 'notes', label: 'Special Requests/Notes', type: 'textarea' },
+      { key: 'servicesSelected', label: 'Services Selected', type: 'textarea', optional: true },
+      { key: 'estimatedTotal', label: 'Estimated Total', type: 'text', optional: true },
     ],
   };
   // Only these may arrive prefilled in the link. Yes/No answers, dates and lists never do.
@@ -129,7 +149,11 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
 
   function serialize(formType, season, data, biz) {
     const lines = [(biz || 'Extreme Marine').toUpperCase() + ' - ' + formType.toUpperCase() + ' FORM', 'Season: ' + season, 'Form Type: ' + formType, ''];
-    for (const f of FIELDS[formType]) lines.push(f.label + ': ' + valueToText(f, data && data[f.key]));
+    for (const f of FIELDS[formType]) {
+      const text = valueToText(f, data && data[f.key]);
+      if (f.optional && !text) continue; // price-related lines only appear once they have something to say
+      lines.push(f.label + ': ' + text);
+    }
     return lines.join('\n');
   }
 
@@ -140,6 +164,82 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       subject: o.formType + ' Form' + who + ' - ' + o.season,
       body: serialize(o.formType, o.season, o.data, o.biz) + '\n\nSent from the ' + (o.biz || 'Extreme Marine') + ' request form.',
     };
+  }
+
+  // ---- Services & Prices (a copy of js/pricing.js's math; tests/hosted-form.test.mjs requires identical results) ----
+  const ESTIMATE_NOTE = 'Estimate only - the shop confirms the final price';
+  const num = (n) => String(Math.round(n * 100) / 100);
+  function moneyCents(cents) {
+    const neg = cents < 0;
+    const c = Math.abs(Math.round(cents));
+    const dollars = String(Math.floor(c / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const rest = c % 100;
+    return (neg ? '-' : '') + '$' + dollars + (rest ? '.' + String(rest).padStart(2, '0') : '');
+  }
+  const money = (dollars) => moneyCents(Math.round(dollars * 100));
+  function parseLength(v) {
+    if (v === null || v === undefined) return null;
+    const m = String(v).trim().match(/^(\d{1,3}(?:\.\d{1,2})?)\s*(?:ft|feet|foot|')?$/i);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return n > 0 && n <= 300 ? n : null;
+  }
+  const hasPrice = (s) => s.price !== null && s.price !== undefined;
+  function priceLabel(s) { if (!hasPrice(s)) return ''; return s.unit === 'foot' ? money(s.price) + '/foot' : money(s.price); }
+  function rowLabel(s) { const p = priceLabel(s); return p ? s.name + ' - ' + p : s.name; }
+  function amountCents(s, len) {
+    if (!hasPrice(s)) return null;
+    const priceCents = Math.round(s.price * 100);
+    if (s.unit !== 'foot') return priceCents;
+    if (len === null || len === undefined) return null;
+    return Math.round((Math.round(len * 100) * priceCents) / 100);
+  }
+  function rowCalc(s, lengthText) {
+    if (s.unit !== 'foot' || !hasPrice(s)) return '';
+    const len = parseLength(lengthText);
+    if (len === null) return 'Enter your boat length above';
+    return num(len) + ' ft x ' + money(s.price) + ' = ' + moneyCents(amountCents(s, len));
+  }
+  function estimateFor(selected, lengthText) {
+    const len = parseLength(lengthText);
+    const lines = [], needsLength = [];
+    let totalCents = 0, pricedCount = 0;
+    for (const s of selected) {
+      const cents = amountCents(s, len);
+      if (!hasPrice(s)) lines.push(s.name + ' - price to be quoted by the shop');
+      else if (s.unit !== 'foot') { lines.push(s.name + ' - ' + money(s.price)); totalCents += cents; pricedCount++; }
+      else if (cents === null) { lines.push(s.name + ' - ' + money(s.price) + '/foot (boat length needed)'); needsLength.push(s.name); }
+      else { lines.push(s.name + ' - ' + money(s.price) + '/foot: ' + num(len) + ' ft x ' + money(s.price) + ' = ' + moneyCents(cents)); totalCents += cents; pricedCount++; }
+    }
+    let totalText = '';
+    if (selected.length) {
+      if (!pricedCount && !needsLength.length) totalText = 'No priced services selected - the shop will quote (' + ESTIMATE_NOTE.toLowerCase() + ')';
+      else totalText = moneyCents(totalCents) + (needsLength.length ? ' so far, boat length needed for ' + needsLength.join(', ') : '') + ' (' + ESTIMATE_NOTE.toLowerCase() + ')';
+    }
+    return { lines: lines, text: lines.join('\n'), totalCents: totalCents, totalText: totalText, pricedCount: pricedCount, needsLength: needsLength };
+  }
+
+  // What the link offers, with prices attached: Winter = storage + winter services, Spring = the Spring-Summer services.
+  // Prices only count when a service's name matches exactly (links from before prices have none, so the old form is shown).
+  function serviceGroups(cfg) {
+    const priceOf = (season, name) => cfg.services.filter((s) => s.season === season && s.name === name)[0] || null;
+    const make = (season, names) => names.map((n) => { const p = priceOf(season, n); return { name: n, season: season, unit: p ? p.unit : 'flat', price: p ? p.price : null }; });
+    if (cfg.form === 'Winter') return [{ key: 'storage', title: 'Storage', items: make('storage', cfg.lists.storageTypes) }, { key: 'winter', title: 'Winter services', items: make('winter', cfg.lists.endOfSeasonServices) }];
+    return [{ key: 'summer', title: 'Spring-Summer services', items: cfg.services.filter((s) => s.season === 'summer').map((s) => ({ name: s.name, season: 'summer', unit: s.unit, price: s.price })) }];
+  }
+  // The price-aware layout is used when the link carries prices (Winter) or Spring-Summer services (Spring). Otherwise the form is exactly as it always was.
+  function usesServicesPanel(cfg) {
+    const groups = serviceGroups(cfg);
+    return cfg.form === 'Winter' ? groups.some((g) => g.items.some(hasPrice)) : groups[0].items.length > 0;
+  }
+  // The answers the panel produces, in the same shapes the app uses: selected = { storage: [service], winter: [...], summer: [...] }
+  function priceAnswers(form, selected, lengthText) {
+    const all = [].concat(selected.storage || [], selected.winter || [], selected.summer || []);
+    const e = estimateFor(all, lengthText);
+    const out = { boatLength: String(lengthText === null || lengthText === undefined ? '' : lengthText).trim(), servicesSelected: e.text, estimatedTotal: e.totalText };
+    if (form === 'Winter') { out.storageType = (selected.storage || []).map((s) => s.name).join('; '); out.endOfSeasonServices = (selected.winter || []).map((s) => s.name); }
+    else { out.summerServices = (selected.summer || []).map((s) => s.name); out.wash = ''; }
+    return out;
   }
 
   const compact = (s) => s.replace(/%3A/gi, ':').replace(/%2C/gi, ',').replace(/%3B/gi, ';').replace(/%40/g, '@').replace(/%24/g, '$');
@@ -158,6 +258,23 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
   const first = (p, k, max) => String((p[k] && p[k][0]) || '').trim().slice(0, max || 500);
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // svc=<storage|winter|summer>:<foot|flat>:<price>:<name>  (price may be empty; the name is everything after the third colon)
+  const SVC = /^(storage|winter|summer):(foot|flat):(\d{1,6}(?:\.\d{1,2})?)?:(.+)$/;
+  function parseServices(values, form) {
+    const out = [], seen = {};
+    for (const v of (values || []).slice(0, 80)) {
+      const m = SVC.exec(String(v));
+      if (!m) continue;
+      if (form === 'Winter' ? m[1] === 'summer' : m[1] !== 'summer') continue;
+      const name = m[4].trim().slice(0, 120);
+      const key = m[1] + '|' + name.toLowerCase();
+      if (!name || seen[key]) continue;
+      seen[key] = 1;
+      out.push({ season: m[1], unit: m[2], price: m[3] ? Number(m[3]) : null, name: name });
+    }
+    return out;
+  }
+
   function readConfig(search, hash) {
     const p = Object.assign({}, parseParams(search), parseParams(hash));
     const ft = first(p, 'form', 20).toLowerCase();
@@ -171,12 +288,15 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
     if (form === 'Spring') for (const i of (p.item || []).slice(0, 60)) { const t = i.trim().slice(0, 300); if (t && items.indexOf(t) < 0) items.push(t); }
     const lists = {};
     for (const k of Object.keys(DEFAULT_LISTS)) lists[k] = DEFAULT_LISTS[k].slice();
+    const services = parseServices(p.svc, form);
+    lists.summerServices = services.filter((s) => s.season === 'summer').map((s) => s.name);
     const over = [['storageOption', 'storageTypes'], ['serviceOption', 'endOfSeasonServices'], ['estimateOption', 'winterEstimateWork']];
     for (const o of over) { const vals = (p[o[0]] || []).map((x) => x.trim().slice(0, 200)).filter(Boolean).slice(0, 40); if (vals.length) lists[o[1]] = vals; }
-    return { ok: true, form, season, shop, biz: first(p, 'biz', 80) || 'Extreme Marine', shopPhone: first(p, 'shopPhone', 40), prefill, items, lists };
+    return { ok: true, form, season, shop, biz: first(p, 'biz', 80) || 'Extreme Marine', shopPhone: first(p, 'shopPhone', 40), prefill, items, lists, services };
   }
 
-  root.FormCore = { FIELDS, DEFAULT_LISTS, DELIVERY, PREFILL_KEYS, formatDate, valueToText, displayRows, serialize, buildEmail, mailtoLink, parseParams, readConfig, EMAIL };
+  root.FormCore = { FIELDS, DEFAULT_LISTS, DELIVERY, PREFILL_KEYS, formatDate, valueToText, displayRows, serialize, buildEmail, mailtoLink, parseParams, readConfig, EMAIL,
+    ESTIMATE_NOTE, moneyCents, money, parseLength, priceLabel, rowLabel, amountCents, rowCalc, estimateFor, serviceGroups, usesServicesPanel, priceAnswers };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
 
@@ -216,9 +336,50 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
 
   const readers = {}, wraps = {};
   const form = el('div', { class: 'grid' });
-  let est = null;
+
+  // Services and prices: only when this customer's link carries them. A link without prices gets the form exactly as it always was.
+  const PANEL_KEYS = FT === 'Winter' ? ['storageType', 'endOfSeasonServices', 'boatLength', 'servicesSelected', 'estimatedTotal'] : ['wash', 'summerServices', 'boatLength', 'servicesSelected', 'estimatedTotal'];
+  const PANEL_AT = FT === 'Winter' ? 'storageType' : 'wash';
+  const panel = C.usesServicesPanel(cfg) ? buildServicesPanel() : null;
+
+  function buildServicesPanel() {
+    const groups = C.serviceGroups(cfg);
+    const before = String(cfg.prefill.storageType || '').split(';').map((x) => x.trim()).filter(Boolean);
+    const length = el('input', { id: 'f-boatLength', type: 'number', inputmode: 'decimal', min: '1', max: '300', step: '0.5', placeholder: 'for example 24' });
+    const boxes = [];
+    const groupEls = groups.map((g) => el('fieldset', { class: 'svc-group' }, el('legend', null, g.title), g.items.map((s, i) => {
+      const id = 'svc-' + g.key + '-' + i;
+      const input = el('input', { type: 'checkbox', id });
+      if (g.key === 'storage' && before.indexOf(s.name) >= 0) input.checked = true;
+      const calc = el('span', { class: 'svc-calc' });
+      const row = el('label', { class: 'svc-row', for: id }, input, el('span', { class: 'svc-name' }, C.rowLabel(s)), calc);
+      boxes.push({ service: s, group: g.key, input: input, calc: calc, row: row });
+      return row;
+    })));
+    const total = el('div', { class: 'svc-total', 'aria-live': 'polite' });
+    const selection = () => { const sel = { storage: [], winter: [], summer: [] }; boxes.forEach((b) => { if (b.input.checked) sel[b.group].push(b.service); }); return sel; };
+    const refresh = () => {
+      boxes.forEach((b) => { b.row.classList.toggle('on', b.input.checked); b.calc.textContent = b.input.checked ? C.rowCalc(b.service, length.value) : ''; });
+      const sel = selection();
+      const e = C.estimateFor([].concat(sel.storage, sel.winter, sel.summer), length.value);
+      total.textContent = 'Estimated total: ' + C.moneyCents(e.totalCents) + (e.needsLength.length ? ' so far' : '');
+    };
+    const root = el('div', { class: 'services-panel' }, el('h2', { class: 'svc-title' }, 'Services and estimate'),
+      el('div', { class: 'field' }, el('label', { for: 'f-boatLength' }, 'Boat Length (feet)'), length,
+        el('div', { class: 'hint' }, 'Used to work out the per-foot prices. With more than one boat, enter the length of the boat these services are for.')),
+      groupEls, total, el('p', { class: 'hint svc-note' }, C.ESTIMATE_NOTE + '.'));
+    root.addEventListener('input', refresh); root.addEventListener('change', refresh);
+    refresh();
+    return { el: root, values: () => C.priceAnswers(FT, selection(), length.value) };
+  }
 
   for (const f of fields) {
+    if (panel && PANEL_KEYS.indexOf(f.key) >= 0) {
+      if (f.key === PANEL_AT) form.append(panel.el);
+      readers[f.key] = () => { const v = panel.values()[f.key]; return v === undefined ? (f.type === 'checks' ? [] : '') : v; };
+      continue;
+    }
+    if (f.optional) continue; // price-only fields exist only when the panel is on
     const id = 'f-' + f.key;
     const pre = cfg.prefill[f.key] || '';
     const wrap = el('div', { class: 'field' + (['textarea', 'checks', 'estimate'].indexOf(f.type) >= 0 ? ' wide' : '') });
@@ -275,7 +436,7 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
 
   const readAnswers = () => {
     const d = {};
-    for (const f of fields) d[f.key] = readers[f.key]();
+    for (const f of fields) d[f.key] = readers[f.key] ? readers[f.key]() : (f.type === 'checks' ? [] : '');
     if (wraps.deliverTo && wraps.deliverTo.hidden) d.deliverTo = '';
     return d;
   };
