@@ -134,9 +134,13 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
 
   function formatDate(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[2] + '/' + m[3] + '/' + m[1] : ''; }
 
-  function valueToText(field, v) {
-    if (field.type === 'checks') return (v || []).join('; ');
-    if (field.type === 'estimate') return Object.entries(v || {}).map(([k, d]) => k + ' = ' + (d || 'No answer')).join('; ');
+  // A ';' (or '\') INSIDE a list item is written '\;' ('\\') in the emailed text so it stays one item. Only the email (wire) is escaped.
+  function escItem(x) { return String(x).replace(/[\\;]/g, '\\$&'); }
+
+  function valueToText(field, v, wire) {
+    var e = wire ? escItem : function (x) { return x; };
+    if (field.type === 'checks') return (v || []).map(e).join('; ');
+    if (field.type === 'estimate') return Object.entries(v || {}).map(([k, d]) => e(k) + ' = ' + (d || 'No answer')).join('; ');
     if (field.type === 'date') return v ? formatDate(v) : '';
     return String(v == null ? '' : v).replace(/\r?\n\s*\n/g, '\n').trim();
   }
@@ -150,7 +154,7 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
   function serialize(formType, season, data, biz) {
     const lines = [(biz || 'Extreme Marine').toUpperCase() + ' - ' + formType.toUpperCase() + ' FORM', 'Season: ' + season, 'Form Type: ' + formType, ''];
     for (const f of FIELDS[formType]) {
-      const text = valueToText(f, data && data[f.key]);
+      const text = valueToText(f, data && data[f.key], true);
       if (f.optional && !text) continue; // price-related lines only appear once they have something to say
       lines.push(f.label + ': ' + text);
     }
