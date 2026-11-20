@@ -28,7 +28,7 @@ input, select, textarea { font:inherit; padding:.55rem .6rem; border:1px solid #
 textarea { resize:vertical; min-height:70px; }
 input[type=checkbox] { width:1.2rem; height:1.2rem; min-height:0; accent-color:var(--navy2); }
 .checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.2rem 1rem; border:0; padding:0; margin:0; }
-.check { display:flex; align-items:center; gap:.5rem; font-weight:400; color:var(--text); min-height:36px; }
+.check { display:flex; align-items:center; gap:.5rem; font-weight:400; color:var(--text); min-height:44px; }
 .est-row { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem 1rem; padding:.5rem 0; border-bottom:1px solid var(--line); }
 .est-row .item { flex:1 1 220px; font-weight:500; } .est-row select { flex:0 0 11rem; width:11rem; }
 details summary { cursor:pointer; color:var(--navy2); font-size:.9rem; margin-top:.5rem; }
@@ -87,7 +87,7 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       { key: 'email', label: 'Email', type: 'email' },
       { key: 'phone', label: 'Phone', type: 'tel' },
       { key: 'boats', label: 'Boat(s) Make/Length', type: 'text' },
-      { key: 'boatLength', label: 'Boat Length (feet)', type: 'text', optional: true },
+      { key: 'boatLength', label: 'Boat Length (feet)', type: 'text', optional: true, inputmode: 'decimal', hint: 'Numbers only - the form does the math.' },
       { key: 'jetSkis', label: 'Jet Ski(s) Make', type: 'text' },
       { key: 'billingAddress', label: 'Billing Address', type: 'textarea' },
       { key: 'localAddress', label: 'Local Address', type: 'textarea' },
@@ -95,7 +95,7 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       { key: 'winterize', label: 'Winterize?', type: 'yesno' },
       { key: 'doneUsingDate', label: 'Done Using Date', type: 'date' },
       { key: 'storing', label: 'Storing?', type: 'yesno' },
-      { key: 'storageType', label: 'Storage Type', type: 'select', list: 'storageTypes' },
+      { key: 'storageType', label: 'Storage Type', type: 'select', list: 'storageTypes', showIf: { key: 'storing', value: 'Yes' } },
       { key: 'springLaunchDate', label: 'Spring Launch Date', type: 'date' },
       { key: 'haulOut', label: 'Haul-Out?', type: 'yesno' },
       { key: 'notes', label: 'Special Requests/Notes', type: 'textarea' },
@@ -110,7 +110,7 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       { key: 'email', label: 'Email', type: 'email' },
       { key: 'phone', label: 'Phone', type: 'tel' },
       { key: 'boats', label: 'Boat(s) Make/Length', type: 'text' },
-      { key: 'boatLength', label: 'Boat Length (feet)', type: 'text', optional: true },
+      { key: 'boatLength', label: 'Boat Length (feet)', type: 'text', optional: true, inputmode: 'decimal', hint: 'Numbers only - the form does the math.' },
       { key: 'jetSkis', label: 'Jet Ski(s) Make', type: 'text' },
       { key: 'keyLocation', label: 'Key Location', type: 'text' },
       { key: 'launchDate', label: 'Requested Launch Date', type: 'date' },
@@ -363,8 +363,10 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
       return row;
     })));
     const total = el('div', { class: 'svc-total', 'aria-live': 'polite' });
-    const selection = () => { const sel = { storage: [], winter: [], summer: [] }; boxes.forEach((b) => { if (b.input.checked) sel[b.group].push(b.service); }); return sel; };
+    const storageOn = () => FT !== 'Winter' || (typeof readers.storing === 'function' && readers.storing() === 'Yes'); // Winter: storage choices only count when Storing? is Yes
+    const selection = () => { const sel = { storage: [], winter: [], summer: [] }; boxes.forEach((b) => { if (b.input.checked && (b.group !== 'storage' || storageOn())) sel[b.group].push(b.service); }); return sel; };
     const refresh = () => {
+      groupEls.forEach((g, i) => { if (groups[i].key === 'storage') g.hidden = !storageOn(); });
       boxes.forEach((b) => { b.row.classList.toggle('on', b.input.checked); b.calc.textContent = b.input.checked ? C.rowCalc(b.service, length.value) : ''; });
       const sel = selection();
       const e = C.estimateFor([].concat(sel.storage, sel.winter, sel.summer), length.value);
@@ -372,11 +374,11 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
     };
     const root = el('div', { class: 'services-panel' }, el('h2', { class: 'svc-title' }, 'Services and estimate'),
       el('div', { class: 'field' }, el('label', { for: 'f-boatLength' }, 'Boat Length (feet)'), length,
-        el('div', { class: 'hint' }, 'Used to work out the per-foot prices. With more than one boat, enter the length of the boat these services are for.')),
+        el('div', { class: 'hint' }, 'Numbers only - the form does the math. Used to work out the per-foot prices. With more than one boat, enter the length of the boat these services are for.')),
       groupEls, total, el('p', { class: 'hint svc-note' }, C.ESTIMATE_NOTE + '.'));
     root.addEventListener('input', refresh); root.addEventListener('change', refresh);
     refresh();
-    return { el: root, values: () => C.priceAnswers(FT, selection(), length.value) };
+    return { el: root, refresh: refresh, values: () => C.priceAnswers(FT, selection(), length.value) };
   }
 
   for (const f of fields) {
@@ -443,11 +445,13 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1rem; }
   const readAnswers = () => {
     const d = {};
     for (const f of fields) d[f.key] = readers[f.key] ? readers[f.key]() : (f.type === 'checks' ? [] : '');
-    if (wraps.deliverTo && wraps.deliverTo.hidden) d.deliverTo = '';
+    // a conditional field that is hidden (Deliver To, Storage Type) reads back blank
+    for (const f of fields) if (f.showIf && wraps[f.key] && wraps[f.key].hidden) d[f.key] = '';
     return d;
   };
   const sync = () => {
-    for (const f of fields) if (f.showIf) wraps[f.key].hidden = readers[f.showIf.key]() !== f.showIf.value;
+    for (const f of fields) if (f.showIf && wraps[f.key]) wraps[f.key].hidden = readers[f.showIf.key]() !== f.showIf.value;
+    if (panel) panel.refresh(); // the services panel hides its storage rows unless Storing? is Yes
     const d = readAnswers();
     submit.disabled = !(d.name && C.EMAIL.test(d.email));
     hint.textContent = submit.disabled ? 'Please enter your name and a valid email address to continue.' : '';
